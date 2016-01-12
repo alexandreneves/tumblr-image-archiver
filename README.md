@@ -7,9 +7,9 @@ Node.JS & npm
 ## Instalation
 
 1. run $ npm install
-2. create a logs folder with log.log and error.log files
-3. create an images folder
-4. create a keys.js file with
+2. create a **logs** folder with **log.log** and **error.log** files
+3. create an **images** folder
+4. create a **keys.js** file with
 ```
 module.exports = {
     consumer_key: '',
