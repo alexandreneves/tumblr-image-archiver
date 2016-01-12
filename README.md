@@ -6,17 +6,10 @@ Node.JS & npm
 
 ## Instalation
 
-1.
-```sh
-$ npm install
-$ mkdir logs
-$ mkdir images
-$ cd logs
-$ touch error.log
-$ touch log.log
-$ touch keys.js
-```
-2. keys.js should have your tumblr client keys
+1. run $ npm install
+2. create a logs folder with log.log and error.log files
+3. create an images folder
+4. create a keys.js file with
 ```
 module.exports = {
     consumer_key: '',
@@ -27,7 +20,7 @@ module.exports = {
 ```
 
 ## Usage
-```sh
+```
 $ node index.js
 ```
 
