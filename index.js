@@ -8,6 +8,7 @@ var request = require('request');
 var fs = require('fs');
 var tumblr = require('tumblr.js');
 var async = require('async');
+var yargs = require('yargs');
 
 /**
  *
@@ -24,21 +25,24 @@ var client = tumblr.createClient(config);
 
 var name = 'Tumblr Image Archiver';
 var date = new Date();
+var argv = yargs.argv;
+var logPath = 'log.log';
 
-// request
-var before = date.getTime();
+// fetch
+
 var limit = 50;
+var offset = 0;
+var before = date.getTime();
 var cycles;
+var delay = 250;
+var fetchBlogPostsConcurrency = 10;
 
 // download
 var downloadConcurrency = 25;
 var downloadPath = "./images/";
 
-// log
-var logPath = 'log.log';
-
 // counters
-var countLikes;
+var countPosts;
 var countPostsWithImage = 0;
 var countPostsWithNoImage = 0;
 var countUnliked = 0;
@@ -59,87 +63,134 @@ var toUnlike = [];
 var run = function() {
 	clearLog();
 
-	client.userLikes({limit: 1}, function (error, data) {
-		if (error !== null) {
-			log(error);
-			return false;
-		}
+	log(name);
 
-		countLikes = data.liked_count;
-
-		log(name);
-
-		if (data.liked_posts.length > 0) {
-			cycles = _.floor(countLikes/limit) + 1;
-
-			log('~ '+ countLikes +' posts to scan')
-			log('~ starting cycle of '+ cycles +' requests of ' + limit + ' posts at a time');
-
-			fetchLikes();
-		} else {
-			log('~ no posts found');
-		}
-	});
+	if (argv.blog) {
+		log('~ Archiving blog = '+ argv.blog);
+		archiveBlog();
+	} else {
+		log('~ Archiving likes');
+		archiveLikes();
+	}
 }
 
-/**
- *
- * LIKES
- */
+ /**
+  *
+  * ARCHIVE BLOG
+  */
 
-var fetchLikes = function() {
+var archiveBlog = function() {
+	client.blogPosts(argv.blog, archiveCallback);
+}
+
+var fecthBlogPosts = function() {
 	var q = async.queue(function(task, callback) {
-		client.userLikes({limit: limit, before: before}, function (error, data) {
-			if (error !== null) {
-				log(error);
-				return false;
-			}
+		client.blogPosts(argv.blog, {offset: offset}, archiveFetchCallback.bind(this, callback));
+	}, fetchBlogPostsConcurrency);
 
-			if (!data.liked_posts.length) { // end of the line
-				callback();
-				return;
-			}
-
-			before = data.liked_posts[data.liked_posts.length - 1].liked_timestamp;
-
-			processArrays(data);
-
-			log('~ cycle info: before = '+ before);
-			
-			callback();
-		});
-	});
-
-	q.drain = function() {
-		if (countPostsWithImage < 1) {
-			log('~ no images to process');
-			return false;
-		}
-
-		// output counters
-		log('~ '+ countPostsWithImage +' posts with images found out of '+ countLikes +' posts');
-		log('~ '+ countPostsWithNoImage +' posts did not contain images');
-
-		// output deleted
-		var deleted = countLikes - (countPostsWithImage + countPostsWithNoImage);
-		if (deleted > 0) log('~ '+ deleted +' were probably deleted');
-			
-		download();
-	};
+	q.drain = archiveDrain;
 
 	for (var i = 0; i < cycles; i++) {
 		q.push();
 	}
 }
 
-var processArrays = function(data) {
-	_.each(data.liked_posts, function(post) {
-		toUnlike.push({
-			'post_url': post.post_url,
-			'id': post.id,
-			'reblog_key': post.reblog_key
-		});
+/**
+ *
+ * ARCHIVE LIKES
+ */
 
+var archiveLikes = function() {
+	client.userLikes({limit: 1}, archiveCallback);
+}
+
+var fetchLikedPosts = function() {
+	var q = async.queue(function(task, callback) {
+		client.userLikes({limit: limit, before: before}, archiveFetchCallback.bind(this, callback));
+	});
+
+	q.drain = archiveDrain;
+
+	for (var i = 0; i < cycles; i++) {
+		q.push();
+	}
+}
+
+/**
+ *
+ * ARCHIVING METHODS
+ */
+
+ var archiveCallback = function(error, data) {
+	if (error !== null) return false;
+
+	const posts = argv.blog ? data.posts : data.liked_posts;
+	countPosts = argv.blog ? data.total_posts : data.liked_count;
+
+	if (posts.length > 0) {
+		cycles = _.floor(countPosts/limit) + 1;
+
+		log('~ ~ '+ countPosts +' posts to scan')
+		log('~ ~ starting cycle of '+ cycles +' requests of ' + limit + ' posts at a time');
+
+		argv.blog ? fecthBlogPosts() : fetchLikedPosts();
+	} else {
+		log('~ ~ no posts found');
+	}
+ }
+
+ var archiveFetchCallback = function(callback, error, data) {
+	if (error !== null) return false;
+
+	const posts = argv.blog ? data.posts : data.liked_posts;
+
+	if (!posts.length) { // end of the line
+		callback();
+		return;
+	}
+
+	if (argv.blog) {
+		log('~ ~ cycle info: offset = '+ offset);
+		offset = offset + limit;
+
+		processImageArray(data);
+	} else {
+		before = data.liked_posts[data.liked_posts.length - 1].liked_timestamp;
+		log('~ ~ cycle info: before = '+ before);
+
+		processImageArray(data);
+		processUnLikeArray(data)
+	}
+	
+	callback();
+}
+
+var archiveDrain = function() {
+	if (countPostsWithImage < 1) {
+		log('~ no images to process');
+		return false;
+	}
+
+	// output counters
+	log('~ ~ '+ countPostsWithImage +' posts with images found out of '+ countPosts +' posts');
+	log('~ ~ '+ countPostsWithNoImage +' posts did not contain images');
+
+	// output deleted
+	var deleted = countPosts - (countPostsWithImage + countPostsWithNoImage);
+	if (deleted > 0) log('~ ~ '+ deleted +' were probably deleted');
+		
+	download();
+}
+
+/**
+ *
+ * ARRAYS
+ */
+
+var processImageArray = function(data) {
+	const posts = data.posts ? data.posts : data.liked_posts;
+
+	_.each(posts, function(post) {
 		if (post.photos) {
 			post.photos.forEach(function(photo) {
 				toDownload.push({
@@ -154,6 +205,16 @@ var processArrays = function(data) {
 			log('~ not a post.photos');
 			log('~ post id: ' + post.post_url);
 		}
+	});
+}
+
+var processUnLikeArray = function(data) {
+	_.each(data.liked_posts, function(post) {
+		toUnlike.push({
+			'post_url': post.post_url,
+			'id': post.id,
+			'reblog_key': post.reblog_key
+		});
 	});
 }
 
@@ -189,10 +250,10 @@ var download = function() {
 	}, downloadConcurrency);
 
 	q.drain = function() {
-		log('~ ' + countDownloaded + ' images downloaded');
-		log('~ ' + countDownloadedErrors + ' errors downloading');
+		log('~ ~ ' + countDownloaded + ' images downloaded');
+		log('~ ~ ' + countDownloadedErrors + ' errors downloading');
 
-		unlike();
+		if (!argv.blog) unlike();
 	};
 
 	q.push(toDownload);
@@ -207,8 +268,6 @@ var unlike = function() {
 	log('~ Unliking posts');
 	log('~ go grab a cuppa\' coffee, this may take a while');
 
-	var interval = 500;
-
 	var q = async.queue(function(post, callback) {
 		setTimeout(function() {
 			client.unlikePost(post.id, post.reblog_key, function (error, data) {
@@ -221,12 +280,12 @@ var unlike = function() {
 
 				callback();
 			});
-		}, interval);
+		}, delay);
 	});
 
 	q.drain = function() {
-		log('~ ' + countUnliked + ' posts unliked');
-		log('~ ' + countUnlikedErrors + ' errors unliking');
+		log('~ ~ ' + countUnliked + ' posts unliked');
+		log('~ ~ ' + countUnlikedErrors + ' errors unliking');
 	};
 
 	q.push(toUnlike);
