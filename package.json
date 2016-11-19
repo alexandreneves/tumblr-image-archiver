@@ -4,10 +4,10 @@
   "description": "Download and archive your liked images on Tumblr",
   "main": "index.js",
   "dependencies": {
-    "lodash": "^3.10.1",
-    "request": "^2.67.0",
-    "tumblr.js": "^0.0.7",
-    "async": "^1.5.2"
+    "lodash": "^4.17.2",
+    "request": "^2.79.0",
+    "tumblr.js": "^1.1.1",
+    "async": "^2.1.2"
   },
   "devDependencies": {},
   "scripts": {
