@@ -14,8 +14,8 @@ var async = require('async');
  * TUMBLR CLIENT
  */
 
-var keys = require('./keys.js');
-var client = tumblr.createClient(keys);
+var config = require('./config.js');
+var client = tumblr.createClient(config);
 
 /**
  *
