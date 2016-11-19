@@ -23,23 +23,20 @@ var client = tumblr.createClient(keys);
  */
 
 var name = 'Tumblr Image Archiver';
+var date = new Date();
 
 // request
-var offset = 0;
-var limit;
+// var offset = 0;
+var before = date.getTime();
+var limit = 50;
 var cycles;
-var cyclesConcurrency = 10;
 
 // download
-var downloadConcurrency = 50;
-var downloadPath = "images/";
+var downloadConcurrency = 25;
+var downloadPath = "./images/";
 
 // log
-var logPath = 'logs/log.log';
-var logErrorPath = 'logs/error.log'
-
-// unlike
-var unlike = false;
+var logPath = 'log.log';
 
 // counters
 var countLikes;
@@ -50,93 +47,113 @@ var countUnlikedErrors = 0;
 var countDownloaded = 0;
 var countDownloadedErrors = 0;
 
-// images
-var images = [];
+// arrays
+var toDownload = [];
+var toUnlike = [];
+
+/**
+ *
+ * RUN
+ * determines the number of cycles necessary to get all the liked posts
+ */
+
+var run = function() {
+	clearLog();
+
+	client.userLikes({limit: 1}, function (error, data) {
+		if (error !== null) {
+			log(error);
+			return false;
+		}
+
+		countLikes = data.liked_count;
+
+		log(name);
+
+		if (data.liked_posts.length > 0) {
+			cycles = _.floor(countLikes/limit) + 1;
+
+			log('~ '+ countLikes +' posts to scan')
+			log('~ starting cycle of '+ cycles +' requests of ' + limit + ' posts at a time');
+
+			fetchLikes();
+		} else {
+			log('~ no posts found');
+		}
+	});
+}
 
 /**
  *
  * LIKES
  */
 
-var run = function() {
-	// clear log
-	logsClear();
-
-	// get cycle limit & likes count
-	client.likes({limit: 1000, offset: 0}, function (error, data) {
-		if (error !== null) {
-			log(error, true);
-			return false;
-		}
-
-		limit = data.liked_posts.length;
-		countLikes = data.liked_count;
-
-		if (limit > 0) {
-			cycles = new Array(_.floor(countLikes/limit) + 1);
-
-			log(name);
-			log('> '+ countLikes +' posts to scan')
-			log('> starting cycle of '+ cycles.length +' requests of ' + limit + ' posts at a time');
-
-			likesFetch();
-		} else {
-			log('> no posts found');
-		}
-	});
-}
-
-var likesFetch = function() {
-	var q = async.queue(function(cycle, callback) {
-		client.likes({limit: limit, offset: (offset + cycle * limit)}, function (error, data) {
+var fetchLikes = function() {
+	var q = async.queue(function(task, callback) {
+		client.userLikes({limit: limit, before: before}, function (error, data) {
 			if (error !== null) {
-				log(error, true);
+				log(error);
 				return false;
 			}
 
-			likesArray(data);
+			if (!data.liked_posts.length) { // end of the line
+				callback();
+				return;
+			}
 
+			before = data.liked_posts[data.liked_posts.length - 1].liked_timestamp;
+
+			processArrays(data);
+
+			log('~ cycle info: before = '+ before);
+			
 			callback();
 		});
-	}, cyclesConcurrency);
+	});
 
 	q.drain = function() {
 		if (countPostsWithImage < 1) {
-			log('> no images to process');
+			log('~ no images to process');
 			return false;
 		}
 
 		// output counters
-		log('> '+ countPostsWithImage +' images found out of '+ countLikes +' posts');
-		log('> '+ countPostsWithNoImage +' were not images');
+		log('~ '+ countPostsWithImage +' posts with images found out of '+ countLikes +' posts');
+		log('~ '+ countPostsWithNoImage +' posts did not contain images');
 
 		// output deleted
 		var deleted = countLikes - (countPostsWithImage + countPostsWithNoImage);
-		if (deleted > 0) log('> '+ deleted +' were probably deleted');
+		if (deleted > 0) log('~ '+ deleted +' were probably deleted');
 			
 		download();
 	};
 
-	_.each(cycles, function(value, cycle) {
-		q.push(cycle);
-	});
+	for (var i = 0; i < cycles; i++) {
+		q.push();
+	}
 }
 
-var likesArray = function(data) {
+var processArrays = function(data) {
 	_.each(data.liked_posts, function(post) {
+		toUnlike.push({
+			'post_url': post.post_url,
+			'id': post.id,
+			'reblog_key': post.reblog_key
+		});
+
 		if (post.photos) {
-			images.push({
-				'id': post.id,
-				'reblog_key': post.reblog_key,
-				'post': post.post_url,
-				'url': post.photos[0].original_size.url
+			post.photos.forEach(function(photo) {
+				toDownload.push({
+					'post_url': photo.post_url,
+					'url': photo.original_size.url
+				});
 			});
 
 			countPostsWithImage++;
 		} else {
 			countPostsWithNoImage++;
-			log('~ not a post.photos', true);
-			log('~ post id: ' + post.post_url, true);
+			log('~ not a post.photos');
+			log('~ post id: ' + post.post_url);
 		}
 	});
 }
@@ -147,7 +164,7 @@ var likesArray = function(data) {
  */
 
 var download = function() {
-	log('> Downloading images');
+	log('~ Downloading '+ toDownload.length +' images');
 
 	var q = async.queue(function (img, callback) {
 		var filename = img.url.split('/').pop();
@@ -159,31 +176,27 @@ var download = function() {
 		});
 		r.on('end', function() {
 			ws.end();
-
 			countDownloaded++;
 			callback();
 		});
 		r.on('error', function(err) {
-			log('~ error saving image', true);
-			log('~ post: ' + img.post, true);
+			log('~ error saving image');
+			log('~ post: ' + img.post_url);
 
 			ws.close();
-
 			countDownloadedErrors++;
 			callback();
 		});
 	}, downloadConcurrency);
 
 	q.drain = function() {
-		log('. ' + countDownloaded + ' images downloaded');
-		log('. ' + countDownloadedErrors + ' errors downloading');
+		log('~ ' + countDownloaded + ' images downloaded');
+		log('~ ' + countDownloadedErrors + ' errors downloading');
 
-		if (unlike) unlikeAll();
+		unlike();
 	};
 
-	_.each(images, function(img) {
-		q.push(img);
-	});
+	q.push(toDownload);
 }
 
 /**
@@ -191,31 +204,33 @@ var download = function() {
  * UNLIKE
  */
 
-var unlikeAll = function() {
-	log('> Unliking images');
+var unlike = function() {
+	log('~ Unliking posts');
+	log('~ go grab a cuppa\' coffee, this may take a while');
 
-	var q = async.queue(function(img, callback) {
-		client.unlike(img.id, img.reblog_key, function (error, data) {
-			if (error !== null) {
-				log(error, true);
-				countUnlikedErrors++;
-			} else {
-				countUnliked++;
-			}
+	var interval = 500;
 
-			callback();
-		});
+	var q = async.queue(function(post, callback) {
+		setTimeout(function() {
+			client.unlikePost(post.id, post.reblog_key, function (error, data) {
+				if (error !== null) {
+					log('~ error unliking '+ post.post_url);
+					countUnlikedErrors++;
+				} else {
+					countUnliked++;
+				}
 
-	}, cyclesConcurrency);
+				callback();
+			});
+		}, interval);
+	});
 
 	q.drain = function() {
-		log('> ' + countUnliked + ' posts unliked');
-		log('> ' + countUnlikedErrors + ' errors unliking');
+		log('~ ' + countUnliked + ' posts unliked');
+		log('~ ' + countUnlikedErrors + ' errors unliking');
 	};
 
-	_.each(images, function(img){
-		q.push(img);
-	});
+	q.push(toUnlike);
 };
 
 /**
@@ -223,28 +238,18 @@ var unlikeAll = function() {
  * LOG
  */
 
-var log = function(output, error) {
+var log = function(output) {
 	var op = output + "\r\n";
 
-	if (!error) {
-		fs.appendFile(logPath, op, function (error) {
-			if (error !== null ) console.log(error);
-		});
-	} else {
-		fs.appendFile(logErrorPath, op, function (error) {
-			if (error !== null ) console.log(error);
-		});
-	}
+	fs.appendFile(logPath, op, function (error) {
+		if (error !== null ) console.log(error);
+	});
 
 	console.log(output);
 };
 
-var logsClear = function() {
+var clearLog = function() {
 	fs.writeFile(logPath, '', function (err) {
-		if (err !== null) console.log(err);
-	});
-
-	fs.writeFile(logErrorPath, '', function (err) {
 		if (err !== null) console.log(err);
 	});
 }
