@@ -1,16 +1,18 @@
 # tumblr-image-archiver
-Download and archive your liked images on Tumblr
+Node script to download/archive and unlike all the images of your liked posts on Tumblr.
 
 ## Requirements
-Node.JS & npm
+* Node.js
+* npm
 
-## Instalation
+## Usage
 
-1. run $ npm install
-2. create a **logs** folder with **log.log** and **error.log** files
-3. create an **images** folder
-4. create a **keys.js** file with
-```
+* `$ npm install`
+* `$ mkdir images`
+* `$ touch log.log`
+* `$ touch keys.js` and add your Tumblr API key/token + secrets
+
+```javascript
 module.exports = {
     consumer_key: '',
     consumer_secret: '',
@@ -18,14 +20,5 @@ module.exports = {
     token_secret: ''
 };
 ```
-
-## Usage
-```
-$ node index.js
-```
-
-## Configurations
-1. Unlike (default: false) - this will unlike all your likes
-
-## Known Issues
-1. Unliking **will** exceed Tumblr rate limits for a big amount of likes
+    
+* `$ node index.js`
