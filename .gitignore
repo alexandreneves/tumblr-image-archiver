@@ -1,7 +1,7 @@
 /images
 /node_modules
 
-/keys.js
+/config.js
 /log.log
 
 .DS_Store

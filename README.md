@@ -10,7 +10,7 @@ Node script to download/archive and unlike all the images of your liked posts on
 * `$ npm install`
 * `$ mkdir images`
 * `$ touch log.log`
-* `$ touch keys.js` and add your Tumblr API key/token + secrets
+* `$ touch config.js` and add your Tumblr API key/token + secrets
 
 ```javascript
 module.exports = {
