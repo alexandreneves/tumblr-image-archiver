@@ -1,26 +1,27 @@
 {
   "name": "tumblr-image-archiver",
   "version": "1.0.0",
-  "description": "Download and archive your liked images on Tumblr",
+  "author": "Alexandre Neves <adn.denied@gmail.com>",
+  "description": "Node script to download/archive and unlike all the images of your liked posts on Tumblr",
+  "homepage": "https://github.com/alexandreneves/tumblr-image-archiver",
+  "license": "ISC",
+  "keywords": [
+    "tumblr",
+    "archiver",
+    "archive",
+    "download",
+    "images",
+    "unlike"
+  ],
   "main": "index.js",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/alexandreneves/tumblr-image-archiver.git"
+  },
   "dependencies": {
     "lodash": "^4.17.2",
     "request": "^2.79.0",
     "tumblr.js": "^1.1.1",
     "async": "^2.1.2"
-  },
-  "devDependencies": {},
-  "scripts": {
-    "test": "echo \"Error: no test specified\" && exit 1"
-  },
-  "repository": {
-    "type": "git",
-    "url": "git+https://github.com/alexandreneves/tumblr-image-archiver.git"
-  },
-  "author": "",
-  "license": "ISC",
-  "bugs": {
-    "url": "https://github.com/alexandreneves/tumblr-image-archiver/issues"
-  },
-  "homepage": "https://github.com/alexandreneves/tumblr-image-archiver#readme"
+  }
 }
