@@ -26,7 +26,6 @@ var name = 'Tumblr Image Archiver';
 var date = new Date();
 
 // request
-// var offset = 0;
 var before = date.getTime();
 var limit = 50;
 var cycles;
