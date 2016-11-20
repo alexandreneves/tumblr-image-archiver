@@ -27,4 +27,4 @@ module.exports = {
 };
 ```
     
-* `$ node index.js` OR `$node index.js --blog blogId
+* `$ node index.js` OR `$node index.js --blog blogId`
