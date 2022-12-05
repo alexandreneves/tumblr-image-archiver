@@ -83,7 +83,7 @@ var archiveBlog = function() {
 	client.blogPosts(argv.blog, archiveCallback);
 }
 
-var fecthBlogPosts = function() {
+var fetchBlogPosts = function() {
 	var q = async.queue(function(task, callback) {
 		client.blogPosts(argv.blog, {offset: offset}, archiveFetchCallback.bind(this, callback));
 	}, fetchBlogPostsConcurrency);
@@ -133,7 +133,7 @@ var fetchLikedPosts = function() {
 		log('~ ~ '+ countPosts +' posts to scan')
 		log('~ ~ starting cycle of '+ cycles +' requests of ' + limit + ' posts at a time');
 
-		argv.blog ? fecthBlogPosts() : fetchLikedPosts();
+		argv.blog ? fetchBlogPosts() : fetchLikedPosts();
 	} else {
 		log('~ ~ no posts found');
 	}
