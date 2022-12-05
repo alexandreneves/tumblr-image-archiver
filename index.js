@@ -1,66 +1,52 @@
-/**
- *
- * REQUIREMENTS
- */
+const _ = require("lodash");
+const request = require("request");
+const fs = require("fs");
+const tumblr = require("tumblr.js");
+const async = require("async");
+const yargs = require("yargs");
 
-var _ = require("lodash");
-var request = require("request");
-var fs = require("fs");
-var tumblr = require("tumblr.js");
-var async = require("async");
-var yargs = require("yargs");
+// region Tumblr client
 
-/**
- *
- * TUMBLR CLIENT
- */
+const config = require("./config.js");
+const client = tumblr.createClient(config);
 
-var config = require("./config.js");
-var client = tumblr.createClient(config);
+// endregion
+// region vars
 
-/**
- *
- * VARS
- */
-
-var name = "Tumblr Image Archiver";
-var date = new Date();
-var argv = yargs.argv;
-var logPath = "log.log";
+const name = "Tumblr Image Archiver";
+const date = new Date();
+const argv = yargs.argv;
+const logPath = "log.log";
 
 // fetch
-
-var limit = 50;
-var offset = 0;
-var before = date.getTime();
-var cycles;
-var delay = 250;
-var fetchBlogPostsConcurrency = 10;
+const limit = 50;
+const before = date.getTime();
+const delay = 250;
+const fetchBlogPostsConcurrency = 10;
+let offset = 0;
+let cycles;
 
 // download
-var downloadConcurrency = 25;
-var downloadPath = "./images/";
+const downloadConcurrency = 25;
+const downloadPath = "./images/";
 
 // counters
-var countPosts;
-var countPostsWithImage = 0;
-var countPostsWithNoImage = 0;
-var countUnliked = 0;
-var countUnlikedErrors = 0;
-var countDownloaded = 0;
-var countDownloadedErrors = 0;
+let countPosts;
+let countPostsWithImage = 0;
+let countPostsWithNoImage = 0;
+let countUnliked = 0;
+let countUnlikedErrors = 0;
+let countDownloaded = 0;
+let countDownloadedErrors = 0;
 
 // arrays
-var toDownload = [];
-var toUnlike = [];
+const toDownload = [];
+const toUnlike = [];
 
-/**
- *
- * RUN
- * determines the number of cycles necessary to get all the liked posts
- */
+// endregion
+// region run
 
-var run = function () {
+function run() {
   clearLog();
 
   log(name);
@@ -72,19 +58,17 @@ var run = function () {
     log("~ Archiving likes");
     archiveLikes();
   }
-};
+}
 
-/**
- *
- * ARCHIVE BLOG
- */
+// endregion
+// region archive blog
 
-var archiveBlog = function () {
+function archiveBlog() {
   client.blogPosts(argv.blog, archiveCallback);
-};
+}
 
-var fetchBlogPosts = function () {
-  var q = async.queue(function (task, callback) {
+function fetchBlogPosts() {
+  const q = async.queue(function (task, callback) {
     client.blogPosts(
       argv.blog,
       { offset: offset },
@@ -94,22 +78,20 @@ var fetchBlogPosts = function () {
 
   q.drain = archiveDrain;
 
-  for (var i = 0; i < cycles; i++) {
+  for (let i = 0; i < cycles; i++) {
     q.push();
   }
-};
+}
 
-/**
- *
- * ARCHIVE LIKES
- */
+// endregion
+// region archive likes
 
-var archiveLikes = function () {
+function archiveLikes() {
   client.userLikes({ limit: 1 }, archiveCallback);
-};
+}
 
-var fetchLikedPosts = function () {
-  var q = async.queue(function (task, callback) {
+function fetchLikedPosts() {
+  const q = async.queue(function (task, callback) {
     client.userLikes(
       { limit: limit, before: before },
       archiveFetchCallback.bind(this, callback)
@@ -118,17 +100,15 @@ var fetchLikedPosts = function () {
 
   q.drain = archiveDrain;
 
-  for (var i = 0; i < cycles; i++) {
+  for (let i = 0; i < cycles; i++) {
     q.push();
   }
-};
+}
 
-/**
- *
- * ARCHIVING METHODS
- */
+// endregion
+// region archiving methods
 
-var archiveCallback = function (error, data) {
+function archiveCallback(error, data) {
   if (error !== null) return false;
 
   const posts = argv.blog ? data.posts : data.liked_posts;
@@ -150,9 +130,9 @@ var archiveCallback = function (error, data) {
   } else {
     log("~ ~ no posts found");
   }
-};
+}
 
-var archiveFetchCallback = function (callback, error, data) {
+function archiveFetchCallback(callback, error, data) {
   if (error !== null) return false;
 
   const posts = argv.blog ? data.posts : data.liked_posts;
@@ -177,9 +157,9 @@ var archiveFetchCallback = function (callback, error, data) {
   }
 
   callback();
-};
+}
 
-var archiveDrain = function () {
+function archiveDrain() {
   if (countPostsWithImage < 1) {
     log("~ no images to process");
     return false;
@@ -196,18 +176,16 @@ var archiveDrain = function () {
   log("~ ~ " + countPostsWithNoImage + " posts did not contain images");
 
   // output deleted
-  var deleted = countPosts - (countPostsWithImage + countPostsWithNoImage);
+  const deleted = countPosts - (countPostsWithImage + countPostsWithNoImage);
   if (deleted > 0) log("~ ~ " + deleted + " were probably deleted");
 
   download();
-};
+}
 
-/**
- *
- * ARRAYS
- */
+// endregion
+// region array
 
-var processImageArray = function (data) {
+function processImageArray(data) {
   const posts = data.posts ? data.posts : data.liked_posts;
 
   _.each(posts, function (post) {
@@ -226,9 +204,9 @@ var processImageArray = function (data) {
       log("~ post id: " + post.post_url);
     }
   });
-};
+}
 
-var processUnLikeArray = function (data) {
+function processUnLikeArray(data) {
   _.each(data.liked_posts, function (post) {
     toUnlike.push({
       post_url: post.post_url,
@@ -236,20 +214,18 @@ var processUnLikeArray = function (data) {
       reblog_key: post.reblog_key,
     });
   });
-};
+}
 
-/**
- *
- * DOWNLOAD
- */
+// endregion
+// region download
 
-var download = function () {
+function download() {
   log("~ Downloading " + toDownload.length + " images");
 
-  var q = async.queue(function (img, callback) {
-    var filename = img.url.split("/").pop();
-    var r = request(img.url);
-    var ws = fs.createWriteStream(downloadPath + filename);
+  const q = async.queue((img, callback) => {
+    const filename = img.url.split("/").pop();
+    const r = request(img.url);
+    const ws = fs.createWriteStream(downloadPath + filename);
 
     r.on("data", function (data) {
       ws.write(data);
@@ -277,18 +253,16 @@ var download = function () {
   };
 
   q.push(toDownload);
-};
+}
 
-/**
- *
- * UNLIKE
- */
+// endregion
+// region unlike
 
-var unlike = function () {
+function unlike() {
   log("~ Unliking posts");
   log("~ go grab a cuppa' coffee, this may take a while");
 
-  var q = async.queue(function (post, callback) {
+  const q = async.queue(function (post, callback) {
     setTimeout(function () {
       client.unlikePost(post.id, post.reblog_key, function (error, data) {
         if (error !== null) {
@@ -309,32 +283,27 @@ var unlike = function () {
   };
 
   q.push(toUnlike);
-};
+}
 
-/**
- *
- * LOG
- */
+// endregion
+// region logging
 
-var log = function (output) {
-  var op = output + "\r\n";
+function log(output) {
+  const op = output + "\r\n";
 
   fs.appendFile(logPath, op, function (error) {
     if (error !== null) console.log(error);
   });
 
   console.log(output);
-};
+}
 
-var clearLog = function () {
+function clearLog() {
   fs.writeFile(logPath, "", function (err) {
     if (err !== null) console.log(err);
   });
-};
+}
 
-/**
- *
- * GO!
- */
+// endregion
 
 run();
