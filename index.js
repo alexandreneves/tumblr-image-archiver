@@ -20,9 +20,9 @@ const logPath = "log.log";
 
 // fetch
 const limit = 50;
-const before = date.getTime();
 const delay = 250;
 const fetchBlogPostsConcurrency = 10;
+let before = date.getTime();
 let offset = 0;
 let cycles;
 
@@ -52,10 +52,10 @@ function run() {
   log(name);
 
   if (argv.blog) {
-    log("~ Archiving blog = " + argv.blog);
+    log(`[ARCHIVE BLOG ${argv.blog}]`);
     archiveBlog();
   } else {
-    log("~ Archiving likes");
+    log("[ARCHIVE LIKES]");
     archiveLikes();
   }
 }
@@ -117,18 +117,12 @@ function archiveCallback(error, data) {
   if (posts.length > 0) {
     cycles = _.floor(countPosts / limit) + 1;
 
-    log("~ ~ " + countPosts + " posts to scan");
-    log(
-      "~ ~ starting cycle of " +
-        cycles +
-        " requests of " +
-        limit +
-        " posts at a time"
-    );
+    log(`~ (${countPosts}) posts to scan`);
+    log(`~ starting cycle of (${cycles}) requests of (${limit}) posts at a time`);
 
     argv.blog ? fetchBlogPosts() : fetchLikedPosts();
   } else {
-    log("~ ~ no posts found");
+    log("~ no posts found");
   }
 }
 
@@ -144,13 +138,13 @@ function archiveFetchCallback(callback, error, data) {
   }
 
   if (argv.blog) {
-    log("~ ~ cycle info: offset = " + offset);
+    log(`~ cycle offset (${offset})`);
     offset = offset + limit;
 
     processImageArray(data);
   } else {
     before = data.liked_posts[data.liked_posts.length - 1].liked_timestamp;
-    log("~ ~ cycle info: before = " + before);
+    log(`~ cycling before (${before})`);
 
     processImageArray(data);
     processUnLikeArray(data);
@@ -166,18 +160,12 @@ function archiveDrain() {
   }
 
   // output counters
-  log(
-    "~ ~ " +
-      countPostsWithImage +
-      " posts with images found out of " +
-      countPosts +
-      " posts"
-  );
-  log("~ ~ " + countPostsWithNoImage + " posts did not contain images");
+  log(`~ (${countPostsWithImage}) posts with images found out of (${countPosts}) posts`);
+  log(`~ (${countPostsWithNoImage}) posts did not contain images`);
 
   // output deleted
   const deleted = countPosts - (countPostsWithImage + countPostsWithNoImage);
-  if (deleted > 0) log("~ ~ " + deleted + " were probably deleted");
+  if (deleted > 0) log(`~ (${deleted}) were probably deleted`);
 
   download();
 }
@@ -200,8 +188,7 @@ function processImageArray(data) {
       countPostsWithImage++;
     } else {
       countPostsWithNoImage++;
-      log("~ not a post.photos");
-      log("~ post id: " + post.post_url);
+      log(`~ not a photos post ${post.post_url})`);
     }
   });
 }
@@ -220,7 +207,8 @@ function processUnLikeArray(data) {
 // region download
 
 function download() {
-  log("~ Downloading " + toDownload.length + " images");
+  log("[DOWNLOAD]");
+  log(`~ (${toDownload.length}) images to download`);
 
   const q = async.queue((img, callback) => {
     const filename = img.url.split("/").pop();
@@ -237,7 +225,7 @@ function download() {
     });
     r.on("error", function (err) {
       log("~ error saving image");
-      log("~ post: " + img.post_url);
+      log(`~ post (${img.post_url})`);
 
       ws.close();
       countDownloadedErrors++;
@@ -246,8 +234,8 @@ function download() {
   }, downloadConcurrency);
 
   q.drain = function () {
-    log("~ ~ " + countDownloaded + " images downloaded");
-    log("~ ~ " + countDownloadedErrors + " errors downloading");
+    log(`~ (${countDownloaded}) images downloaded`);
+    log(`~ (${countDownloadedErrors}) errors downloading`);
 
     if (!argv.blog) unlike();
   };
@@ -259,14 +247,14 @@ function download() {
 // region unlike
 
 function unlike() {
-  log("~ Unliking posts");
+  log("[UNLIKE]");
   log("~ go grab a cuppa' coffee, this may take a while");
 
   const q = async.queue(function (post, callback) {
     setTimeout(function () {
       client.unlikePost(post.id, post.reblog_key, function (error, data) {
         if (error !== null) {
-          log("~ error unliking " + post.post_url);
+          log(`~ error unliking (${post.post_url})`);
           countUnlikedErrors++;
         } else {
           countUnliked++;
@@ -278,8 +266,8 @@ function unlike() {
   });
 
   q.drain = function () {
-    log("~ ~ " + countUnliked + " posts unliked");
-    log("~ ~ " + countUnlikedErrors + " errors unliking");
+    log(`~ (${countUnliked}) posts unliked`);
+    log(`~ (${countUnlikedErrors}) errors unliking`);
   };
 
   q.push(toUnlike);
